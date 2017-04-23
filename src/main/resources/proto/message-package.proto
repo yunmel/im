@@ -1,0 +1,15 @@
+syntax = "proto3";
+package msg;
+
+option java_package = "com.yunmel.game.pb";
+option java_outer_classname = "LoginMsg";
+
+message LoginReq {
+  string useranme = 1;
+  string password=2;
+}
+
+message LoginRes {
+  int32 code = 1;
+  string desc=2;
+}
