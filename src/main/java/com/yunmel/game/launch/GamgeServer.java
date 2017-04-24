@@ -17,9 +17,11 @@ import org.slf4j.LoggerFactory;
 
 import com.google.protobuf.InvalidProtocolBufferException;
 import com.yunmel.game.IServer;
+import com.yunmel.game.cmd.Handler;
 import com.yunmel.game.core.codec.protoc.PbCodecFactory;
-import com.yunmel.game.core.msg.Message;
+import com.yunmel.game.exception.HanderException;
 import com.yunmel.game.handler.PbHandler;
+import com.yunmel.game.launch.pool.MsgPool;
 import com.yunmel.game.msg.MsgId;
 import com.yunmel.game.pb.LoginMsg;
 
@@ -30,28 +32,21 @@ public class GamgeServer implements IServer
   // 服务器数据监听端口
   private int port;
   private NioSocketAcceptor acceptor;
-
+  private MsgPool msgPool;
+  
   @Override
   public void doCommand(IoSession iosession, IoBuffer buf)
   {
     int msgId = buf.getInt();
     byte[] data = new byte[buf.remaining()];
     buf.get(data);
+    Object obj = null;
     switch (msgId)
     {
       case MsgId.LOGIN_REQ:
         try
         {
-          LoginMsg.LoginReq loginReq = LoginMsg.LoginReq.parseFrom(data);
-          LOG.info("server request success : [{}].", loginReq.toString());
-
-          LoginMsg.LoginRes loginRes =
-              LoginMsg.LoginRes.newBuilder().setCode(1000).setDesc("登陆成功").build();
-          
-          Message message = new Message();
-          message.setMsgId(MsgId.LOGIN_RES);
-          message.setData(loginRes.toByteArray());
-          iosession.write(message);
+          obj = LoginMsg.LoginReq.parseFrom(data);
         }
         catch (InvalidProtocolBufferException e)
         {
@@ -61,6 +56,23 @@ public class GamgeServer implements IServer
 
       default:
         break;
+    }
+    if(null == obj)
+    {
+      LOG.error("obj is null,message is error. msg id is {}.", msgId);
+      return;
+    }
+    try
+    {
+      Handler handler = msgPool.getHandler(msgId);
+      handler.setData(obj);
+      handler.setSession(iosession);
+      handler.action();
+    }
+    catch (InstantiationException | IllegalAccessException | HanderException e)
+    {
+      LOG.error("hander is null,message is error. msg id is {}.", msgId);
+      e.printStackTrace();
     }
   }
 
@@ -100,6 +112,7 @@ public class GamgeServer implements IServer
       LOG.error("Mina Server Port " + port + "Already Use:" + e.getMessage());
       System.exit(1);
     }
+    msgPool = MsgPool.getIt();
   }
 
   @Override
